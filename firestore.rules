@@ -32,8 +32,9 @@ service cloud.firestore {
     }
 
     function isWorkEntry(data, expectedUserId) {
-      return data.keys().hasAll(['date', 'task', 'durationMs', 'earned', 'userId'])
-        && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['employer'])))
+      return data.keys().hasAll(['id', 'date', 'task', 'durationMs', 'earned', 'userId'])
+        && (data.keys().size() == 6 || (data.keys().size() == 7 && data.keys().hasAll(['employer'])))
+        && data.id is string
         && data.date is string && data.date.size() <= 64
         && data.task is string && data.task.size() <= 1024
         && data.durationMs is number

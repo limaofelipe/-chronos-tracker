@@ -15,6 +15,7 @@
       "description": "A tracked work session",
       "type": "object",
       "properties": {
+        "id": { "type": "string", "description": "The ID of the entry" },
         "date": { "type": "string", "description": "ISO date string of when the work was done or logged" },
         "task": { "type": "string", "description": "Description of the task" },
         "durationMs": { "type": "number", "description": "Duration of the task in milliseconds" },
@@ -22,7 +23,7 @@
         "userId": { "type": "string", "description": "The ID of the user who owns this entry" },
         "employer": { "type": "string", "description": "The employer for this entry" }
       },
-      "required": ["date", "task", "durationMs", "earned", "userId"]
+      "required": ["id", "date", "task", "durationMs", "earned", "userId"]
     }
   },
   "firestore": {

@@ -163,20 +163,29 @@ export default function App() {
       
       try {
         await setDoc(doc(db, `users/${user.uid}/entries`, newEntry.id), newEntry);
+        // Reset timer only after successful save
+        setIsRunning(false);
+        setSessionStart(null);
+        setAccumulatedMs(0);
+        setCurrentMs(0);
+        setTask('');
       } catch (error) {
         handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/entries/${newEntry.id}`);
       }
     } else if (finalMs > 0 && !user) {
       alert("Please login to save your tracked time!");
+      setIsRunning(false);
+      setSessionStart(null);
+      setAccumulatedMs(finalMs);
       return;
+    } else {
+      // If finalMs === 0
+      setIsRunning(false);
+      setSessionStart(null);
+      setAccumulatedMs(0);
+      setCurrentMs(0);
+      setTask('');
     }
-
-    // Reset timer
-    setIsRunning(false);
-    setSessionStart(null);
-    setAccumulatedMs(0);
-    setCurrentMs(0);
-    setTask('');
   };
 
   const addManualEntry = async (e: React.FormEvent) => {
