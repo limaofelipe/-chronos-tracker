@@ -4,7 +4,7 @@ import { formatTime, formatCurrency, cn } from './lib/utils';
 import { generateInvoicePDF } from './lib/pdf';
 import { WorkEntry } from './types';
 import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from './lib/firebase';
-import { collection, doc, setDoc, onSnapshot, query, orderBy, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, query, where, orderBy, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 export default function App() {
@@ -87,13 +87,15 @@ export default function App() {
         // Listen for entries
         const q = query(
           collection(db, `users/${currentUser.uid}/entries`),
-          orderBy('date', 'desc')
+          where('userId', '==', currentUser.uid)
         );
         const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
           const newEntries: WorkEntry[] = [];
           snapshot.forEach((docSnap) => {
             newEntries.push({ id: docSnap.id, ...docSnap.data() } as WorkEntry);
           });
+          // Sort client-side to avoid needing a Firestore composite index
+          newEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           setEntries(newEntries);
         }, (error) => {
           handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/entries`);
