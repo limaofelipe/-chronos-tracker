@@ -1,0 +1,6 @@
+{
+  "name": "Time and Invoice Tracker",
+  "description": "App to track work hours, log activities, set hourly rate, and generate PDF invoices for the employer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

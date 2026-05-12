@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isUserProfile(data) {
+      return data.keys().hasAll(['hourlyRate', 'employerName'])
+        && data.keys().size() == 2
+        && data.hourlyRate is number
+        && data.employerName is string
+        && data.employerName.size() <= 256;
+    }
+
+    function isWorkEntry(data, expectedUserId) {
+      return data.keys().hasAll(['date', 'task', 'durationMs', 'earned', 'userId'])
+        && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['employer'])))
+        && data.date is string && data.date.size() <= 64
+        && data.task is string && data.task.size() <= 1024
+        && data.durationMs is number
+        && data.earned is number
+        && data.userId is string && data.userId == expectedUserId
+        && (!data.keys().hasAll(['employer']) || (data.employer is string && data.employer.size() <= 256));
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId
+                    && isUserProfile(incoming());
+      
+      allow update: if isSignedIn() && request.auth.uid == userId
+                    && isUserProfile(incoming())
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['hourlyRate', 'employerName']);
+      
+      // Prevent deleting the profile, or allow if explicitly requested. 
+      // Not strictly necessary to allow deleting, but fine to deny for now.
+      allow delete: if false;
+
+      match /entries/{entryId} {
+        // Enforce ABAC using resource.data check for reads on lists
+        allow list: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
+        // Or if existing doesn't work well contextually in list due to some client issues without where clauses, 
+        // relying on the subcollection structure where `userId` is in the path is acceptable along with identity checks:
+        // Actually, for list query safety:
+        // allow list: if isSignedIn() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+        allow get: if isSignedIn() && request.auth.uid == userId
+                   && existing().userId == request.auth.uid;
+                   
+        allow create: if isSignedIn()
+                      && request.auth.uid == userId
+                      && isValidId(entryId)
+                      && isWorkEntry(incoming(), request.auth.uid);
+
+        allow update: if isSignedIn()
+                      && request.auth.uid == userId
+                      && existing().userId == request.auth.uid
+                      && isWorkEntry(incoming(), request.auth.uid)
+                      && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'task', 'durationMs', 'earned', 'employer'])
+                      && incoming().userId == existing().userId; // immutable userId
+                      
+        allow delete: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
+      }
+    }
+  }
+}

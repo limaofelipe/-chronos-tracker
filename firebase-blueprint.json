@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User configuration like hourly rate and employer name",
+      "type": "object",
+      "properties": {
+        "hourlyRate": { "type": "number", "description": "The user's default hourly rate" },
+        "employerName": { "type": "string", "description": "The user's default employer/client name" }
+      },
+      "required": ["hourlyRate", "employerName"]
+    },
+    "WorkEntry": {
+      "title": "Work Entry",
+      "description": "A tracked work session",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "ISO date string of when the work was done or logged" },
+        "task": { "type": "string", "description": "Description of the task" },
+        "durationMs": { "type": "number", "description": "Duration of the task in milliseconds" },
+        "earned": { "type": "number", "description": "Amount earned during this task" },
+        "userId": { "type": "string", "description": "The ID of the user who owns this entry" },
+        "employer": { "type": "string", "description": "The employer for this entry" }
+      },
+      "required": ["date", "task", "durationMs", "earned", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores user configuration"
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/WorkEntry" },
+      "description": "Stores individual work entries per user"
+    }
+  }
+}
