@@ -6,6 +6,7 @@ import { WorkEntry } from './types';
 import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, doc, setDoc, onSnapshot, query, where, orderBy, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { DatePicker } from './components/DatePicker';
 
 export default function App() {
   // Auth State
@@ -153,8 +154,9 @@ export default function App() {
 
     if (finalMs > 0 && user) {
       const earned = (finalMs / (1000 * 60 * 60)) * hourlyRate;
+      const newEntryRef = doc(collection(db, `users/${user.uid}/entries`));
       const newEntry: WorkEntry = {
-        id: crypto.randomUUID(),
+        id: newEntryRef.id,
         date: new Date().toISOString(),
         task: task.trim() || 'No description',
         durationMs: finalMs,
@@ -164,7 +166,7 @@ export default function App() {
       };
       
       try {
-        await setDoc(doc(db, `users/${user.uid}/entries`, newEntry.id), newEntry);
+        await setDoc(newEntryRef, newEntry);
         // Reset timer only after successful save
         setIsRunning(false);
         setSessionStart(null);
@@ -203,8 +205,9 @@ export default function App() {
     
     if (totalMs > 0) {
       const earned = (totalMs / (1000 * 60 * 60)) * hourlyRate;
+      const newEntryRef = doc(collection(db, `users/${user.uid}/entries`));
       const newEntry: WorkEntry = {
-        id: crypto.randomUUID(),
+        id: newEntryRef.id,
         date: new Date(manualDate).toISOString(),
         task: manualTask.trim() || 'No description',
         durationMs: totalMs,
@@ -214,7 +217,7 @@ export default function App() {
       };
       
       try {
-        await setDoc(doc(db, `users/${user.uid}/entries`, newEntry.id), newEntry);
+        await setDoc(newEntryRef, newEntry);
         setManualTask('');
         setManualHours('');
         setManualMinutes('');
@@ -467,20 +470,22 @@ export default function App() {
             <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex flex-wrap gap-4 items-end">
               <div>
                 <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">From Date</label>
-                <input 
-                  type="date" 
-                  value={filterStartDate} 
-                  onChange={(e) => setFilterStartDate(e.target.value)} 
-                  className="bg-white border border-slate-200 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                <DatePicker
+                  value={filterStartDate}
+                  onChange={setFilterStartDate}
+                  highlightedDates={entries.map(e => e.date)}
+                  className="w-36"
+                  placeholder="From..."
                 />
               </div>
               <div>
                 <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">To Date</label>
-                <input 
-                  type="date" 
-                  value={filterEndDate} 
-                  onChange={(e) => setFilterEndDate(e.target.value)} 
-                  className="bg-white border border-slate-200 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                <DatePicker
+                  value={filterEndDate}
+                  onChange={setFilterEndDate}
+                  highlightedDates={entries.map(e => e.date)}
+                  className="w-36"
+                  placeholder="To..."
                 />
               </div>
               <div>
@@ -513,7 +518,11 @@ export default function App() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="col-span-2 lg:col-span-1">
                     <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Date</label>
-                    <input type="date" required value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="w-full bg-white border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                    <DatePicker 
+                      value={manualDate} 
+                      onChange={setManualDate} 
+                      highlightedDates={entries.map(e => e.date)}
+                    />
                   </div>
                   <div className="col-span-2 lg:col-span-1">
                     <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Hrs/Min</label>

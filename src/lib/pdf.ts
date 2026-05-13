@@ -10,10 +10,27 @@ export function generateInvoicePDF(entries: WorkEntry[], hourlyRate: number, emp
   doc.setFontSize(22);
   doc.text('Service Invoice', 14, 20);
   
+  const entryDates = entries.map(e => new Date(e.date).getTime()).filter(t => !isNaN(t));
+  let periodStr = 'N/A';
+  if (entryDates.length > 0) {
+    const minDateTs = Math.min(...entryDates);
+    const minD = new Date(minDateTs);
+    // get Sunday before or equal to minDate
+    const sundayStart = new Date(minD);
+    sundayStart.setDate(sundayStart.getDate() - sundayStart.getDay());
+    // next Sunday
+    const sundayEnd = new Date(sundayStart);
+    sundayEnd.setDate(sundayEnd.getDate() + 7);
+    
+    periodStr = `${new Intl.DateTimeFormat('en-US').format(sundayStart)} - ${new Intl.DateTimeFormat('en-US').format(sundayEnd)}`;
+  }
+  const generatedDateStr = new Intl.DateTimeFormat('en-US').format(new Date());
+
   doc.setFontSize(12);
-  doc.text(`Date: ${new Intl.DateTimeFormat('en-US').format(new Date())}`, 14, 30);
-  doc.text(`Employer/Client: ${employerName || 'Not specified'}`, 14, 38);
-  doc.text(`Hourly Rate: ${formatCurrency(hourlyRate)}/h`, 14, 46);
+  doc.text(`Generated on: ${generatedDateStr}`, 14, 30);
+  doc.text(`Period: ${periodStr}`, 14, 38);
+  doc.text(`Employer/Client: ${employerName || 'Not specified'}`, 14, 46);
+  doc.text(`Hourly Rate: ${formatCurrency(hourlyRate)}/h`, 14, 54);
 
   // Table Data
   const tableData = entries.map((entry) => [
@@ -28,7 +45,7 @@ export function generateInvoicePDF(entries: WorkEntry[], hourlyRate: number, emp
 
   // Add Table
   autoTable(doc, {
-    startY: 55,
+    startY: 65,
     head: [['Date', 'Activity', 'Time (H:M:S)', 'Amount']],
     body: tableData,
     theme: 'grid',
@@ -38,7 +55,7 @@ export function generateInvoicePDF(entries: WorkEntry[], hourlyRate: number, emp
   });
 
   // Footer
-  const finalY = (doc as any).lastAutoTable.finalY || 55;
+  const finalY = (doc as any).lastAutoTable.finalY || 65;
   doc.setFontSize(10);
   doc.text('Thank you for your business!', 14, finalY + 15);
 
