@@ -52,6 +52,11 @@ export default function App() {
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterEmployer, setFilterEmployer] = useState('');
+  
+  // Invoice Filter States
+  const [filterInvoiceStartDate, setFilterInvoiceStartDate] = useState('');
+  const [filterInvoiceEndDate, setFilterInvoiceEndDate] = useState('');
+  const [filterInvoiceEmployer, setFilterInvoiceEmployer] = useState('');
 
   // Persist configurations and active timer
   useEffect(() => {
@@ -307,6 +312,21 @@ export default function App() {
   });
 
   const uniqueEmployers = Array.from(new Set(entries.map(e => (e.employer || '').trim()).filter(Boolean)));
+
+  const filteredInvoices = invoices.filter(invoice => {
+    let matches = true;
+    if (filterInvoiceStartDate && invoice.generatedAt < filterInvoiceStartDate) matches = false;
+    // Add one day to filterInvoiceEndDate so it includes the full end date
+    if (filterInvoiceEndDate) {
+      const end = new Date(filterInvoiceEndDate);
+      end.setDate(end.getDate() + 1);
+      if (invoice.generatedAt >= end.toISOString()) matches = false;
+    }
+    if (filterInvoiceEmployer && (invoice.employer || '').trim() !== filterInvoiceEmployer) matches = false;
+    return matches;
+  });
+
+  const uniqueInvoiceEmployers = Array.from(new Set(invoices.map(e => (e.employer || '').trim()).filter(Boolean)));
 
   const handleGeneratePDF = async () => {
     if (filteredEntries.length === 0) {
@@ -720,55 +740,102 @@ export default function App() {
             )}
             </>
             ) : (
-              // Invoices List
-              <div className="overflow-x-auto flex-1 h-0 min-h-[300px]">
-                {invoices.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3 p-8">
-                    <FileText className="w-12 h-12 stroke-[1.5]" />
-                    <p className="text-sm font-medium">No invoices generated yet.</p>
-                    <p className="text-xs">Go to "Entry History" and click "Generate Invoice".</p>
+              <>
+                {/* Invoice Filters */}
+                <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex flex-wrap gap-4 items-end">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">From Date</label>
+                    <DatePicker
+                      value={filterInvoiceStartDate}
+                      onChange={setFilterInvoiceStartDate}
+                      highlightedDates={invoices.map(e => e.generatedAt)}
+                      className="w-36"
+                      placeholder="From..."
+                    />
                   </div>
-                ) : (
-                  <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 bg-slate-50">
-                      <tr className="text-[10px] uppercase font-bold text-slate-500 select-none">
-                        <th className="px-6 py-4 border-b border-slate-200">Generated On</th>
-                        <th className="px-6 py-4 border-b border-slate-200 hidden sm:table-cell w-48">Period</th>
-                        <th className="px-6 py-4 border-b border-slate-200 hidden md:table-cell w-32">Employer</th>
-                        <th className="px-6 py-4 border-b border-slate-200 text-right w-32">Amount</th>
-                        <th className="px-4 py-4 border-b border-slate-200 w-16"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm text-slate-600">
-                      {invoices.map(invoice => (
-                        <tr key={invoice.id} className="border-b border-slate-100 hover:bg-slate-50/50 group">
-                          <td className="px-6 py-4 font-medium text-slate-900">
-                            {new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(invoice.generatedAt))}
-                          </td>
-                          <td className="px-6 py-4 text-xs text-slate-500 hidden sm:table-cell">
-                            {invoice.periodStr}
-                          </td>
-                          <td className="px-6 py-4 text-[12px] text-slate-500 hidden md:table-cell">
-                            {invoice.employer || '-'}
-                          </td>
-                          <td className="px-6 py-4 text-right font-mono font-medium text-indigo-700">
-                            {formatCurrency(invoice.totalAmount)}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <button 
-                              onClick={() => removeInvoice(invoice.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">To Date</label>
+                    <DatePicker
+                      value={filterInvoiceEndDate}
+                      onChange={setFilterInvoiceEndDate}
+                      highlightedDates={invoices.map(e => e.generatedAt)}
+                      className="w-36"
+                      placeholder="To..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Employer / Client</label>
+                    <select 
+                      value={filterInvoiceEmployer} 
+                      onChange={(e) => setFilterInvoiceEmployer(e.target.value)} 
+                      className="bg-white border border-slate-200 p-2 text-xs min-w-[150px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">All Employers</option>
+                      {uniqueInvoiceEmployers.map(emp => (
+                        <option key={emp} value={emp}>{emp}</option>
                       ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+                    </select>
+                  </div>
+                  {(filterInvoiceStartDate || filterInvoiceEndDate || filterInvoiceEmployer) && (
+                    <button 
+                      onClick={() => { setFilterInvoiceStartDate(''); setFilterInvoiceEndDate(''); setFilterInvoiceEmployer(''); }}
+                      className="text-[10px] text-slate-500 hover:text-slate-800 underline font-bold uppercase pb-2"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+
+                {/* Invoices List */}
+                <div className="overflow-x-auto flex-1 h-0 min-h-[300px]">
+                  {filteredInvoices.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3 p-8">
+                      <FileText className="w-12 h-12 stroke-[1.5]" />
+                      <p className="text-sm font-medium">No invoices generated yet.</p>
+                      <p className="text-xs">Go to "Entry History" and click "Generate Invoice".</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 bg-slate-50">
+                        <tr className="text-[10px] uppercase font-bold text-slate-500 select-none">
+                          <th className="px-6 py-4 border-b border-slate-200">Generated On</th>
+                          <th className="px-6 py-4 border-b border-slate-200 hidden sm:table-cell w-48">Period</th>
+                          <th className="px-6 py-4 border-b border-slate-200 hidden md:table-cell w-32">Employer</th>
+                          <th className="px-6 py-4 border-b border-slate-200 text-right w-32">Amount</th>
+                          <th className="px-4 py-4 border-b border-slate-200 w-16"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm text-slate-600">
+                        {filteredInvoices.map(invoice => (
+                          <tr key={invoice.id} className="border-b border-slate-100 hover:bg-slate-50/50 group">
+                            <td className="px-6 py-4 font-medium text-slate-900">
+                              {new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(invoice.generatedAt))}
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-500 hidden sm:table-cell">
+                              {invoice.periodStr}
+                            </td>
+                            <td className="px-6 py-4 text-[12px] text-slate-500 hidden md:table-cell">
+                              {invoice.employer || '-'}
+                            </td>
+                            <td className="px-6 py-4 text-right font-mono font-medium text-indigo-700">
+                              {formatCurrency(invoice.totalAmount)}
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <button 
+                                onClick={() => removeInvoice(invoice.id)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                title="Delete Record"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
