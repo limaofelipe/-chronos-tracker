@@ -24,6 +24,20 @@
         "employer": { "type": "string", "description": "The employer for this entry" }
       },
       "required": ["id", "date", "task", "durationMs", "earned", "userId"]
+    },
+    "InvoiceHistory": {
+      "title": "Invoice History",
+      "description": "Record of a generated invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The ID of the invoice" },
+        "generatedAt": { "type": "string", "description": "ISO date string of when it was generated" },
+        "periodStr": { "type": "string", "description": "The period of the invoice" },
+        "employer": { "type": "string", "description": "Employer or client name" },
+        "totalAmount": { "type": "number", "description": "Total amount billed" },
+        "userId": { "type": "string", "description": "The ID of the user who generated this invoice" }
+      },
+      "required": ["id", "generatedAt", "periodStr", "employer", "totalAmount", "userId"]
     }
   },
   "firestore": {
@@ -34,6 +48,10 @@
     "/users/{userId}/entries/{entryId}": {
       "schema": { "$ref": "#/entities/WorkEntry" },
       "description": "Stores individual work entries per user"
+    },
+    "/users/{userId}/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/InvoiceHistory" },
+      "description": "Stores generated invoices history per user"
     }
   }
 }

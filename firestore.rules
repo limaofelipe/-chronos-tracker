@@ -43,6 +43,17 @@ service cloud.firestore {
         && (!data.keys().hasAll(['employer']) || (data.employer is string && data.employer.size() <= 256));
     }
 
+    function isInvoiceHistory(data, expectedUserId) {
+      return data.keys().hasAll(['id', 'generatedAt', 'periodStr', 'totalAmount', 'userId'])
+        && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['employer'])))
+        && data.id is string
+        && data.generatedAt is string && data.generatedAt.size() <= 64
+        && data.periodStr is string && data.periodStr.size() <= 128
+        && data.totalAmount is number
+        && data.userId is string && data.userId == expectedUserId
+        && (!data.keys().hasAll(['employer']) || (data.employer is string && data.employer.size() <= 256));
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn() && request.auth.uid == userId;
       allow create: if isSignedIn() && request.auth.uid == userId
@@ -78,6 +89,18 @@ service cloud.firestore {
                       && isWorkEntry(incoming(), request.auth.uid)
                       && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'task', 'durationMs', 'earned', 'employer'])
                       && incoming().userId == existing().userId; // immutable userId
+                      
+        allow delete: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
+      }
+
+      match /invoices/{invoiceId} {
+        allow list: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
+        allow get: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
+        
+        allow create: if isSignedIn()
+                      && request.auth.uid == userId
+                      && isValidId(invoiceId)
+                      && isInvoiceHistory(incoming(), request.auth.uid);
                       
         allow delete: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
       }

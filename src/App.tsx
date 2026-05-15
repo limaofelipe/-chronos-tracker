@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Square, FileText, Plus, Trash2, Clock, CheckCircle, Download, LogIn, LogOut } from 'lucide-react';
 import { formatTime, formatCurrency, cn } from './lib/utils';
 import { generateInvoicePDF } from './lib/pdf';
-import { WorkEntry } from './types';
+import { WorkEntry, InvoiceHistory } from './types';
 import { auth, db, loginWithGoogle, logout, handleFirestoreError, OperationType } from './lib/firebase';
 import { collection, doc, setDoc, onSnapshot, query, where, orderBy, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -33,6 +33,10 @@ export default function App() {
 
   // Entries State
   const [entries, setEntries] = useState<WorkEntry[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceHistory[]>([]);
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState<'entries' | 'invoices'>('entries');
 
   // Manual Entry State
   const [showManual, setShowManual] = useState(false);
@@ -104,10 +108,30 @@ export default function App() {
         }, (error) => {
           handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/entries`);
         });
+
+        // Listen for invoices
+        const qInvoices = query(
+          collection(db, `users/${currentUser.uid}/invoices`),
+          where('userId', '==', currentUser.uid)
+        );
+        const unsubscribeInvoices = onSnapshot(qInvoices, (snapshot) => {
+          const loadedInvoices: InvoiceHistory[] = [];
+          snapshot.forEach((docSnap) => {
+            loadedInvoices.push({ id: docSnap.id, ...docSnap.data() } as InvoiceHistory);
+          });
+          loadedInvoices.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
+          setInvoices(loadedInvoices);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/invoices`);
+        });
         
-        return () => unsubscribeSnapshot();
+        return () => {
+          unsubscribeSnapshot();
+          unsubscribeInvoices();
+        };
       } else {
         setEntries([]);
+        setInvoices([]);
       }
     });
 
@@ -245,6 +269,15 @@ export default function App() {
     }
   };
 
+  const removeInvoice = async (id: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, `users/${user.uid}/invoices`, id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${user.uid}/invoices/${id}`);
+    }
+  };
+
   const clearAllEntries = async () => {
     if (!user) return;
     if (confirm('Are you sure you want to delete all history?')) {
@@ -275,11 +308,45 @@ export default function App() {
 
   const uniqueEmployers = Array.from(new Set(entries.map(e => (e.employer || '').trim()).filter(Boolean)));
 
-  const handleGeneratePDF = () => {
+  const handleGeneratePDF = async () => {
     if (filteredEntries.length === 0) {
       alert('No entries to generate an invoice.');
       return;
     }
+    // Calculate periodStr to store
+    const entryDates = filteredEntries.map(e => new Date(e.date).getTime()).filter(t => !isNaN(t));
+    let periodStr = 'N/A';
+    if (entryDates.length > 0) {
+      const minDateTs = Math.min(...entryDates);
+      const minD = new Date(minDateTs);
+      const sundayStart = new Date(minD);
+      sundayStart.setDate(sundayStart.getDate() - sundayStart.getDay());
+      const sundayEnd = new Date(sundayStart);
+      sundayEnd.setDate(sundayEnd.getDate() + 7);
+      periodStr = `${new Intl.DateTimeFormat('en-US').format(sundayStart)} - ${new Intl.DateTimeFormat('en-US').format(sundayEnd)}`;
+    }
+
+    const totalAmount = filteredEntries.reduce((sum, entry) => sum + entry.earned, 0);
+
+    // Save metadata to DB if user is logged in
+    if (user) {
+      const invoiceRef = doc(collection(db, `users/${user.uid}/invoices`));
+      const invoiceData: InvoiceHistory = {
+        id: invoiceRef.id,
+        generatedAt: new Date().toISOString(),
+        periodStr,
+        employer: filterEmployer || employerName,
+        totalAmount,
+        userId: user.uid
+      };
+      
+      try {
+        await setDoc(invoiceRef, invoiceData);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/invoices`);
+      }
+    }
+
     // PDF generated using the filtered list and using the filterEmployer if applicable
     generateInvoicePDF(filteredEntries, hourlyRate, filterEmployer || employerName);
   };
@@ -451,30 +518,54 @@ export default function App() {
         <div className="flex-1 flex flex-col gap-6">
           <div className="bg-white border border-slate-200 flex-1 flex flex-col shadow-sm min-h-[600px]">
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Entry History</h2>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setShowManual(!showManual)}
-                  className="flex items-center gap-2 text-slate-500 font-bold text-[10px] uppercase tracking-wider border border-slate-300 px-4 py-2 hover:bg-slate-50 transition-colors"
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setActiveTab('entries')}
+                  className={cn(
+                    "text-xs font-bold uppercase tracking-widest pb-1 transition-colors",
+                    activeTab === 'entries' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-600"
+                  )}
                 >
-                  <Plus className="w-3 h-3" /> Add Manual
+                  Entry History
                 </button>
-                <button
-                  onClick={handleExportCSV}
-                  className="flex items-center gap-2 text-emerald-600 font-bold text-[10px] uppercase tracking-wider border border-emerald-600 px-4 py-2 hover:bg-emerald-50 transition-colors"
+                <button 
+                  onClick={() => setActiveTab('invoices')}
+                  className={cn(
+                    "text-xs font-bold uppercase tracking-widest pb-1 transition-colors",
+                    activeTab === 'invoices' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-slate-400 hover:text-slate-600"
+                  )}
                 >
-                  <Download className="w-3 h-3" /> Export CSV
-                </button>
-                <button
-                  onClick={handleGeneratePDF}
-                  className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-wider border border-indigo-600 px-4 py-2 hover:bg-indigo-50 transition-colors"
-                >
-                  <FileText className="w-3 h-3" /> Generate Invoice (PDF)
+                  Invoices
                 </button>
               </div>
+              
+              {activeTab === 'entries' && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setShowManual(!showManual)}
+                    className="flex items-center gap-2 text-slate-500 font-bold text-[10px] uppercase tracking-wider border border-slate-300 px-4 py-2 hover:bg-slate-50 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Add Manual
+                  </button>
+                  <button
+                    onClick={handleExportCSV}
+                    className="flex items-center gap-2 text-emerald-600 font-bold text-[10px] uppercase tracking-wider border border-emerald-600 px-4 py-2 hover:bg-emerald-50 transition-colors"
+                  >
+                    <Download className="w-3 h-3" /> Export CSV
+                  </button>
+                  <button
+                    onClick={handleGeneratePDF}
+                    className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-wider border border-indigo-600 px-4 py-2 hover:bg-indigo-50 transition-colors"
+                  >
+                    <FileText className="w-3 h-3" /> Generate Invoice (PDF)
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Filters */}
+            {activeTab === 'entries' ? (
+              <>
+                {/* Filters */}
             <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex flex-wrap gap-4 items-end">
               <div>
                 <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">From Date</label>
@@ -625,6 +716,58 @@ export default function App() {
                 >
                   Clear All
                 </button>
+              </div>
+            )}
+            </>
+            ) : (
+              // Invoices List
+              <div className="overflow-x-auto flex-1 h-0 min-h-[300px]">
+                {invoices.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3 p-8">
+                    <FileText className="w-12 h-12 stroke-[1.5]" />
+                    <p className="text-sm font-medium">No invoices generated yet.</p>
+                    <p className="text-xs">Go to "Entry History" and click "Generate Invoice".</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 bg-slate-50">
+                      <tr className="text-[10px] uppercase font-bold text-slate-500 select-none">
+                        <th className="px-6 py-4 border-b border-slate-200">Generated On</th>
+                        <th className="px-6 py-4 border-b border-slate-200 hidden sm:table-cell w-48">Period</th>
+                        <th className="px-6 py-4 border-b border-slate-200 hidden md:table-cell w-32">Employer</th>
+                        <th className="px-6 py-4 border-b border-slate-200 text-right w-32">Amount</th>
+                        <th className="px-4 py-4 border-b border-slate-200 w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm text-slate-600">
+                      {invoices.map(invoice => (
+                        <tr key={invoice.id} className="border-b border-slate-100 hover:bg-slate-50/50 group">
+                          <td className="px-6 py-4 font-medium text-slate-900">
+                            {new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(invoice.generatedAt))}
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-500 hidden sm:table-cell">
+                            {invoice.periodStr}
+                          </td>
+                          <td className="px-6 py-4 text-[12px] text-slate-500 hidden md:table-cell">
+                            {invoice.employer || '-'}
+                          </td>
+                          <td className="px-6 py-4 text-right font-mono font-medium text-indigo-700">
+                            {formatCurrency(invoice.totalAmount)}
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <button 
+                              onClick={() => removeInvoice(invoice.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Delete Record"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
           </div>
