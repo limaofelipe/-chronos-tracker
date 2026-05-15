@@ -57,7 +57,33 @@ export function generateInvoicePDF(entries: WorkEntry[], hourlyRate: number, emp
   // Footer
   const finalY = (doc as any).lastAutoTable.finalY || 65;
   doc.setFontSize(10);
-  doc.text('Thank you for your business!', 14, finalY + 15);
+  let currentY = finalY + 15;
+  doc.text('Thank you for your business!', 14, currentY);
+  
+  if (currentY + 80 > doc.internal.pageSize.getHeight()) {
+    doc.addPage();
+    currentY = 20;
+  } else {
+    currentY += 15;
+  }
+  
+  // Payment Instructions
+  doc.setFontSize(11);
+  doc.text('Payment Instructions:', 14, currentY);
+  
+  doc.setFontSize(9);
+  doc.text('ACH Transfer or Wise (Deposit in USD or BRL)', 14, currentY + 6);
+  doc.text('Wise Name Tag: @antoniofelipet', 14, currentY + 11);
+  
+  doc.text('These are the USD account details for Antonio Felipe Torres Lima at Wise.', 14, currentY + 21);
+  doc.text('- If you are sending from a bank in the United States, you can use these details to make a domestic transfer.', 14, currentY + 26);
+  doc.text('- If you are sending from somewhere else, make an international Swift transfer.', 14, currentY + 31);
+  
+  doc.text('Name: Antonio Felipe Torres Lima', 14, currentY + 41);
+  doc.text('Account Type: Deposit (Use when sending money from the United States)', 14, currentY + 46);
+  doc.text('Routing number (for wire and ACH transfers): 084009519', 14, currentY + 51);
+  doc.text('Account Number: 336689223409946', 14, currentY + 56);
+  doc.text('Address: Wise US Inc, 108 W 13th St, Wilmington, DE, 19801, United States', 14, currentY + 61);
 
   // Save the PDF
   doc.save(`invoice_${new Date().getTime()}.pdf`);

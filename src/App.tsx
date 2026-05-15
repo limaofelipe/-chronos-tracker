@@ -39,7 +39,10 @@ export default function App() {
   const [manualTask, setManualTask] = useState('');
   const [manualHours, setManualHours] = useState('');
   const [manualMinutes, setManualMinutes] = useState('');
+  const [manualSeconds, setManualSeconds] = useState('');
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [manualEmployer, setManualEmployer] = useState('');
+  const [manualRate, setManualRate] = useState('');
 
   // Filter States
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -162,7 +165,7 @@ export default function App() {
         durationMs: finalMs,
         earned,
         userId: user.uid,
-        employer: employerName
+        employer: employerName.trim()
       };
       
       try {
@@ -201,10 +204,12 @@ export default function App() {
     
     const h = parseInt(manualHours) || 0;
     const m = parseInt(manualMinutes) || 0;
-    const totalMs = (h * 60 * 60 * 1000) + (m * 60 * 1000);
+    const s = parseInt(manualSeconds) || 0;
+    const totalMs = (h * 60 * 60 * 1000) + (m * 60 * 1000) + (s * 1000);
     
     if (totalMs > 0) {
-      const earned = (totalMs / (1000 * 60 * 60)) * hourlyRate;
+      const rateToUse = manualRate ? parseFloat(manualRate) : hourlyRate;
+      const earned = (totalMs / (1000 * 60 * 60)) * rateToUse;
       const newEntryRef = doc(collection(db, `users/${user.uid}/entries`));
       const newEntry: WorkEntry = {
         id: newEntryRef.id,
@@ -213,7 +218,7 @@ export default function App() {
         durationMs: totalMs,
         earned,
         userId: user.uid,
-        employer: employerName
+        employer: manualEmployer.trim() || employerName.trim()
       };
       
       try {
@@ -221,6 +226,9 @@ export default function App() {
         setManualTask('');
         setManualHours('');
         setManualMinutes('');
+        setManualSeconds('');
+        setManualEmployer('');
+        setManualRate('');
         setShowManual(false);
       } catch (error) {
         handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}/entries/${newEntry.id}`);
@@ -261,11 +269,11 @@ export default function App() {
       end.setDate(end.getDate() + 1);
       if (entry.date >= end.toISOString()) matches = false;
     }
-    if (filterEmployer && entry.employer !== filterEmployer) matches = false;
+    if (filterEmployer && (entry.employer || '').trim() !== filterEmployer) matches = false;
     return matches;
   });
 
-  const uniqueEmployers = Array.from(new Set(entries.map(e => e.employer).filter(Boolean)));
+  const uniqueEmployers = Array.from(new Set(entries.map(e => (e.employer || '').trim()).filter(Boolean)));
 
   const handleGeneratePDF = () => {
     if (filteredEntries.length === 0) {
@@ -515,7 +523,7 @@ export default function App() {
             {showManual && (
               <form onSubmit={addManualEntry} className="m-6 p-6 bg-slate-50 border border-slate-200 space-y-4">
                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-800">Add Time Manually</h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-7 gap-4">
                   <div className="col-span-2 lg:col-span-1">
                     <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Date</label>
                     <DatePicker 
@@ -524,12 +532,21 @@ export default function App() {
                       highlightedDates={entries.map(e => e.date)}
                     />
                   </div>
-                  <div className="col-span-2 lg:col-span-1">
-                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Hrs/Min</label>
+                  <div className="col-span-2 lg:col-span-2">
+                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Time (H/M/S)</label>
                     <div className="flex gap-2">
                       <input type="number" min="0" placeholder="0h" value={manualHours} onChange={(e) => setManualHours(e.target.value)} className="w-full bg-white border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                       <input type="number" min="0" max="59" placeholder="0m" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} className="w-full bg-white border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                      <input type="number" min="0" max="59" placeholder="0s" value={manualSeconds} onChange={(e) => setManualSeconds(e.target.value)} className="w-full bg-white border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                     </div>
+                  </div>
+                  <div className="col-span-2 lg:col-span-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Rate ($/h)</label>
+                    <input type="number" min="0" step="0.01" placeholder={hourlyRate.toString()} value={manualRate} onChange={(e) => setManualRate(e.target.value)} className="w-full bg-white border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                  <div className="col-span-2 lg:col-span-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Employer</label>
+                    <input type="text" placeholder="Client Name" value={manualEmployer} onChange={(e) => setManualEmployer(e.target.value)} className="w-full bg-white border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                   </div>
                   <div className="col-span-2 lg:col-span-2">
                     <label className="text-[10px] font-bold uppercase text-slate-500 mb-1 block">Activity</label>
