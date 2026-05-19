@@ -240,9 +240,12 @@ export default function App() {
       const rateToUse = manualRate ? parseFloat(manualRate) : hourlyRate;
       const earned = (totalMs / (1000 * 60 * 60)) * rateToUse;
       const newEntryRef = doc(collection(db, `users/${user.uid}/entries`));
+      const [y, m, d] = manualDate.split('-');
+      const localDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0);
+
       const newEntry: WorkEntry = {
         id: newEntryRef.id,
-        date: new Date(manualDate).toISOString(),
+        date: localDate.toISOString(),
         task: manualTask.trim() || 'No description',
         durationMs: totalMs,
         earned,
